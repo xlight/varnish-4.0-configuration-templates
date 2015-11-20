@@ -175,7 +175,16 @@ sub vcl_recv {
   # Before you blindly enable this, have a read here: https://ma.ttias.be/stop-caching-static-files/
   if (req.url ~ "^[^?]*\.(bmp|bz2|css|doc|eot|flv|gif|gz|ico|jpeg|jpg|js|less|pdf|png|rtf|swf|txt|woff|xml)(\?.*)?$") {
     unset req.http.Cookie;
+    
+    # force cache, client can not control, disable Ctrl+F5 force refresh
+    unset req.http.Cache-Control;
+    unset req.http.Pragma;
     return (hash);
+  }
+  
+  # Automate minify js&css file. Need php_minify placed in /min/
+  if(req.url  ~ "\.(css|js)(\?|$)"){
+    set req.url = "/min/?f=" + regsub(req.url, "^([^?]+)\?*(.*)$","\1&\2");
   }
 
   # Send Surrogate-Capability headers to announce ESI support to backend
@@ -306,6 +315,9 @@ sub vcl_backend_response {
   # Before you blindly enable this, have a read here: https://ma.ttias.be/stop-caching-static-files/
   if (bereq.url ~ "^[^?]*\.(bmp|bz2|css|doc|eot|flv|gif|gz|ico|jpeg|jpg|js|less|mp[34]|pdf|png|rar|rtf|swf|tar|tgz|txt|wav|woff|xml|zip|webm)(\?.*)?$") {
     unset beresp.http.set-cookie;
+    set beresp.ttl = 1w;
+    unset beresp.http.Expires;
+    set beresp.http.Cache-Control= "s-max-age=604800";
   }
 
   # Large static files are delivered directly to the end-user without
@@ -316,6 +328,17 @@ sub vcl_backend_response {
     set beresp.do_stream = true;  # Check memory usage it'll grow in fetch_chunksize blocks (128k by default) if the backend doesn't send a Content-Length header, so only enable it for big objects
     set beresp.do_gzip = false;   # Don't try to compress it for storage
   }
+  
+  # cache some 404 & 500 for a little while, make less error requests to backend
+  if (beresp.status == 404 || beresp.status == 500) {
+    set beresp.ttl = 10s;
+  }
+  
+  # force gzip js,css,json ,even they do not have a proper ext name.
+  if (beresp.http.Content-Type ~ "(javascript|text|json)")    {
+    set beresp.do_gzip = true;
+  }
+
 
   # Sometimes, a 301 or 302 redirect formed via Apache's mod_rewrite can mess with the HTTP port that is being passed along.
   # This often happens with simple rewrite rules in a scenario where Varnish runs on :80 and Apache on :8080 on the same box.
@@ -367,6 +390,8 @@ sub vcl_deliver {
   unset resp.http.Via;
   unset resp.http.Link;
   unset resp.http.X-Generator;
+  
+  set resp.http.Server = "Hector Server v1.3 by @xLight";
 
   return (deliver);
 }
