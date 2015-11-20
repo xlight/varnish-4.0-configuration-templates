@@ -169,6 +169,11 @@ sub vcl_recv {
     return (hash);
   }
 
+  # Automate minify js&css file. Need php_minify placed in /min/
+  if(req.url  ~ "\.(css|js)(\?|$)"){
+    set req.url = "/min/?f=" + regsub(req.url, "^([^?]+)\?*(.*)$","\1&\2");
+  }
+
   # Remove all cookies for static files
   # A valid discussion could be held on this line: do you really need to cache static files that don't cause load? Only if you have memory left.
   # Sure, there's disk I/O, but chances are your OS will already have these files in their buffers (thus memory).
@@ -182,11 +187,6 @@ sub vcl_recv {
     return (hash);
   }
   
-  # Automate minify js&css file. Need php_minify placed in /min/
-  if(req.url  ~ "\.(css|js)(\?|$)"){
-    set req.url = "/min/?f=" + regsub(req.url, "^([^?]+)\?*(.*)$","\1&\2");
-  }
-
   # Send Surrogate-Capability headers to announce ESI support to backend
   set req.http.Surrogate-Capability = "key=ESI/1.0";
 
