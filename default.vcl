@@ -423,6 +423,13 @@ sub vcl_synth {
   return (deliver);
 }
 
+sub vcl_backend_error {
+    set beresp.http.Content-Type = "text/html; charset=utf-8";
+    synthetic( {"errors fetch backend"} );
+    return (deliver);
+}
+
+
 
 sub vcl_fini {
   # Called when VCL is discarded only after all requests have exited the VCL.
