@@ -326,7 +326,7 @@ sub vcl_backend_response {
   if (bereq.url ~ "^[^?]*\.(7z|avi|bz2|flac|flv|gz|mka|mkv|mov|mp3|mp4|mpeg|mpg|ogg|ogm|opus|rar|tar|tgz|tbz|txz|wav|webm|xz|zip)(\?.*)?$") {
     unset beresp.http.set-cookie;
     set beresp.do_stream = true;  # Check memory usage it'll grow in fetch_chunksize blocks (128k by default) if the backend doesn't send a Content-Length header, so only enable it for big objects
-    set beresp.do_gzip = false;   # Don't try to compress it for storage
+    set beresp.do_gzip   = false;   # Don't try to compress it for storage
   }
   
   # cache some 404 & 500 for a little while, make less error requests to backend
@@ -355,6 +355,11 @@ sub vcl_backend_response {
     set beresp.ttl = 120s; # Important, you shouldn't rely on this, SET YOUR HEADERS in the backend
     set beresp.uncacheable = true;
     return (deliver);
+  }
+
+  # Don't cache 50x responses
+  if (beresp.status == 500 || beresp.status == 502 || beresp.status == 503 || beresp.status == 504) {
+    return (abandon);
   }
 
   # Allow stale content, in case the backend goes down.
